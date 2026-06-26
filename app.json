@@ -5,31 +5,43 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0f0f1a"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.drnzy000.PrixBon"
+      "bundleIdentifier": "com.drnzy000.PrixBon",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PrixBon gebruikt de camera om bonnetjes te scannen en lokaal op te slaan."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0f0f1a"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.drnzy000.PrixBon"
+      "package": "com.drnzy000.PrixBon",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PrixBon gebruikt de camera om bonnetjes te scannen en lokaal op te slaan."
+        }
+      ]
     ],
     "extra": {
       "router": {},
