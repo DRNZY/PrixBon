@@ -18,7 +18,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductRow from '../components/ProductRow';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { addReceipt, formatEuro } from '../hooks/useStorage';
+import { notifyPriceAlert } from '../hooks/useNotifications';
+import {
+  addReceipt,
+  checkPriceAlert,
+  formatEuro,
+} from '../hooks/useStorage';
 import type { Country, Product, Receipt } from '../types';
 
 interface DraftProduct {
@@ -154,8 +159,9 @@ export default function ScanScreen() {
     }
     setSaving(true);
     try {
+      const storeName = store.trim();
       const receipt: Omit<Receipt, 'id' | 'createdAt'> = {
-        store: store.trim(),
+        store: storeName,
         date: new Date(date).toISOString(),
         country,
         total: parsed.total,
@@ -164,11 +170,33 @@ export default function ScanScreen() {
         products: parsed.products,
       };
       await addReceipt(receipt);
+      // After the receipt is on disk, walk every product and fire a local
+      // notification for each one whose price matches (or beats) an active
+      // alert. Fire-and-forget — a permission denial shouldn't block the flow.
+      const triggered = parsed.products.filter(
+        (p) => p.price > 0 && p.name.trim().length > 0,
+      );
+      const fired: string[] = [];
+      for (const p of triggered) {
+        const hit = await checkPriceAlert(p.name, p.price, storeName);
+        if (!hit) continue;
+        await notifyPriceAlert(p.name, p.price, storeName);
+        fired.push(p.name);
+      }
       // reset form
       setStore('');
       setPhotoUri(undefined);
       setDrafts([newDraft()]);
-      Alert.alert('Opgeslagen', `Bon van ${receipt.store} (${formatEuro(receipt.total)}) toegevoegd.`);
+      const summary =
+        fired.length > 0
+          ? `Bon opgeslagen. ${fired.length} prijsalert${
+              fired.length === 1 ? '' : 's'
+            } geactiveerd.`
+          : `Bon van ${receipt.store} (${formatEuro(receipt.total)}) toegevoegd.`;
+      Alert.alert(
+        fired.length > 0 ? 'Opgeslagen + alert!' : 'Opgeslagen',
+        summary,
+      );
     } finally {
       setSaving(false);
     }

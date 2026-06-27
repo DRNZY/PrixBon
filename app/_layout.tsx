@@ -21,7 +21,7 @@ export default function RootLayout() {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
             borderTopWidth: StyleSheet.hairlineWidth,
-            height: 64,
+            height: 68,
             paddingBottom: 8,
             paddingTop: 6,
           },
@@ -80,6 +80,16 @@ export default function RootLayout() {
             tabBarLabel: 'Stats',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="stats-chart" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Instellingen',
+            tabBarLabel: 'Instellingen',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="settings" size={size} color={color} />
             ),
           }}
         />

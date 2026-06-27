@@ -46,14 +46,53 @@ export interface PriceAlert {
   createdAt: string;
 }
 
+export type ReceiptSort = 'date' | 'store' | 'total';
+export type CurrencySymbol = '€' | 'Fr' | '$';
+
+export interface NotificationPrefs {
+  enabled: boolean;           // master kill-switch for price-alert notifications
+  quietHoursEnabled: boolean; // suppress between 22:00 and 07:00 local
+  weekdaysOnly: boolean;      // only fire Mon–Fri
+}
+
+export interface UserSettings {
+  profile: {
+    name: string;
+    defaultCountry: Country;
+  };
+  preferences: {
+    currency: CurrencySymbol;
+    sortReceiptsBy: ReceiptSort;
+  };
+  notifications: NotificationPrefs;
+}
+
 export interface AppData {
   receipts: Receipt[];
   shopping: ShoppingItem[];
   alerts: PriceAlert[];
+  settings: UserSettings;
 }
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  profile: {
+    name: '',
+    defaultCountry: 'BE',
+  },
+  preferences: {
+    currency: '€',
+    sortReceiptsBy: 'date',
+  },
+  notifications: {
+    enabled: true,
+    quietHoursEnabled: false,
+    weekdaysOnly: false,
+  },
+};
 
 export const EMPTY_APP_DATA: AppData = {
   receipts: [],
   shopping: [],
   alerts: [],
+  settings: DEFAULT_SETTINGS,
 };

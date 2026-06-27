@@ -1,9 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { formatEuro, useAppData } from '../hooks/useStorage';
+import {
+  formatDate,
+  formatEuro,
+  getPriceHistorySync,
+  summarizePriceHistory,
+  useAppData,
+} from '../hooks/useStorage';
 import type { Product, Receipt } from '../types';
 
 interface CategoryAggregate {
@@ -22,6 +35,11 @@ interface MonthlyAggregate {
   key: string;       // YYYY-MM
   label: string;     // localized label
   total: number;
+}
+
+interface ProductOption {
+  name: string;
+  count: number;
 }
 
 function aggregate<T extends { total: number }>(
@@ -89,8 +107,26 @@ function mostExpensiveProduct(receipts: Receipt[]): Product | null {
   return top;
 }
 
+function buildProductOptions(receipts: Receipt[]): ProductOption[] {
+  const map = new Map<string, ProductOption>();
+  for (const r of receipts) {
+    for (const p of r.products) {
+      const key = p.name.trim();
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) existing.count += 1;
+      else map.set(key, { name: key, count: 1 });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export default function StatsScreen() {
   const { data, ready } = useAppData();
+  const [filter, setFilter] = useState('');
 
   const stats = useMemo(() => {
     const receipts = data.receipts;
@@ -105,6 +141,7 @@ export default function StatsScreen() {
     const monthly = buildMonthly(receipts);
     const stores = buildStores(receipts);
     const categories = buildCategories(receipts);
+    const products = buildProductOptions(receipts);
     return {
       totalSpent,
       productCount,
@@ -114,6 +151,7 @@ export default function StatsScreen() {
       monthly,
       stores,
       categories,
+      products,
       receiptCount: receipts.length,
     };
   }, [data.receipts]);
@@ -121,6 +159,23 @@ export default function StatsScreen() {
   const stores = aggregate(stats.stores);
   const categories = aggregate(stats.categories);
   const monthly = aggregate(stats.monthly);
+
+  // Filter products by typed text — matches prefix or substring (case-insensitive).
+  const productFilter = filter.trim().toLowerCase();
+  const filteredProducts = productFilter
+    ? stats.products.filter((p) => p.name.toLowerCase().includes(productFilter))
+    : stats.products;
+
+  const selectedProduct =
+    filteredProducts[0]?.name ?? stats.products[0]?.name ?? null;
+  const priceHistory = useMemo(() => {
+    if (!selectedProduct) return [];
+    return getPriceHistorySync(data.receipts, selectedProduct);
+  }, [selectedProduct, data.receipts]);
+  const priceSummary = useMemo(
+    () => summarizePriceHistory(priceHistory),
+    [priceHistory],
+  );
 
   if (!ready) {
     return (
@@ -167,6 +222,58 @@ export default function StatsScreen() {
             small
           />
         </View>
+
+        <Section title="Prijsverloop per product">
+          <TextInput
+            value={filter}
+            onChangeText={setFilter}
+            placeholder="Filter op productnaam…"
+            placeholderTextColor={colors.textMuted}
+            style={styles.filterInput}
+          />
+
+          {filteredProducts.length === 0 ? (
+            <Text style={styles.muted}>
+              Geen producten gevonden voor “{filter.trim()}”.
+            </Text>
+          ) : (
+            <View style={styles.chipsRow}>
+              {filteredProducts.slice(0, 10).map((p) => {
+                const active = p.name === selectedProduct;
+                return (
+                  <Pressable
+                    key={p.name}
+                    onPress={() => setFilter(p.name)}
+                    style={[styles.chip, active && styles.chipActive]}
+                  >
+                    <Text
+                      style={[styles.chipText, active && styles.chipTextActive]}
+                      numberOfLines={1}
+                    >
+                      {p.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.chipCount,
+                        active && styles.chipCountActive,
+                      ]}
+                    >
+                      ×{p.count}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {selectedProduct ? (
+            <PriceChart
+              product={selectedProduct}
+              history={priceHistory}
+              summary={priceSummary}
+            />
+          ) : null}
+        </Section>
 
         <Section title="Per maand">
           {monthly.items.map((m) => (
@@ -217,6 +324,134 @@ export default function StatsScreen() {
         </Text>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function PriceChart({
+  product,
+  history,
+  summary,
+}: {
+  product: string;
+  history: ReturnType<typeof getPriceHistorySync>;
+  summary: ReturnType<typeof summarizePriceHistory>;
+}) {
+  if (history.length === 0) {
+    return (
+      <View style={styles.chartEmpty}>
+        <Ionicons name="pulse-outline" size={28} color={colors.textMuted} />
+        <Text style={styles.chartEmptyText}>
+          Geen prijshistorie voor “{product}”.
+        </Text>
+      </View>
+    );
+  }
+
+  const values = history.map((p) => p.price);
+  const maxPrice = Math.max(...values);
+  const minPrice = Math.min(...values);
+  // Add 10% padding so the line doesn't sit on the chart edge.
+  const range = Math.max(maxPrice - minPrice, 0.01);
+  const yMax = maxPrice + range * 0.1;
+  const yMin = Math.max(0, minPrice - range * 0.1);
+  const yRange = Math.max(yMax - yMin, 0.0001);
+
+  // SVG-free chart: stack normalized heights via plain Views.
+  const pointCount = history.length;
+  // If the user has only one data point, render a single horizontal marker
+  // instead of a meaningless single-dot "line".
+  const single = pointCount === 1;
+
+  return (
+    <View style={styles.chartCard}>
+      <View style={styles.chartHeadlineRow}>
+        <Text style={styles.chartProduct} numberOfLines={1}>
+          {product}
+        </Text>
+        <Text style={styles.chartSampleCount}>
+          {pointCount} {pointCount === 1 ? 'meting' : 'metingen'}
+        </Text>
+      </View>
+
+      <View style={styles.summaryRow}>
+        <SummaryStat label="Gem." value={formatEuro(summary.average)} />
+        <SummaryStat label="Min" value={formatEuro(summary.min)} tone="success" />
+        <SummaryStat label="Max" value={formatEuro(summary.max)} tone="danger" />
+      </View>
+
+      <View style={styles.chartFrame}>
+        {single ? (
+          <View style={styles.singlePointWrap}>
+            <View style={styles.singlePoint} />
+            <Text style={styles.singlePointLabel}>
+              {formatEuro(history[0].price)}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.barsRow}>
+            {history.map((p, i) => {
+              const heightPct = ((p.price - yMin) / yRange) * 100;
+              // Highlight the best (lowest) price point.
+              const isBest = p.price <= summary.min + Number.EPSILON;
+              return (
+                <View key={`${p.receiptId}-${i}`} style={styles.barCol}>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        { height: `${Math.max(4, heightPct)}%` },
+                        isBest && styles.barFillBest,
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barDate}>
+                    {new Date(p.date).toLocaleDateString('nl-BE', {
+                      day: '2-digit',
+                      month: 'short',
+                    })}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {history.length > 0 ? (
+        <View style={styles.chartFooter}>
+          <Text style={styles.chartFooterLabel}>Beste prijs</Text>
+          <Text style={styles.chartFooterValue}>
+            {formatEuro(summary.min)} • {formatDate(summary.best!.date)} •{' '}
+            {summary.best!.store}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'success' | 'danger';
+}) {
+  return (
+    <View style={styles.summaryStat}>
+      <Text style={styles.summaryStatLabel}>{label}</Text>
+      <Text
+        style={[
+          styles.summaryStatValue,
+          tone === 'success' && { color: colors.success },
+          tone === 'danger' && { color: colors.danger },
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
   );
 }
 
@@ -403,10 +638,168 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: colors.accent,
   },
+  barFillBest: {
+    backgroundColor: colors.success,
+  },
   footnote: {
     color: colors.textMuted,
     fontSize: typography.tiny,
     textAlign: 'center',
     marginTop: spacing.xl,
+  },
+  filterInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text,
+    fontSize: typography.body,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  chipText: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '600',
+  },
+  chipTextActive: {
+    color: colors.textInverse,
+  },
+  chipCount: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: '700',
+  },
+  chipCountActive: {
+    color: colors.textInverse,
+  },
+  chartCard: {
+    marginTop: spacing.sm,
+    gap: spacing.md,
+  },
+  chartHeadlineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chartProduct: {
+    color: colors.text,
+    fontSize: typography.h3,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  chartSampleCount: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: '700',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  summaryStat: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  summaryStatLabel: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  summaryStatValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  chartFrame: {
+    height: 160,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    justifyContent: 'flex-end',
+  },
+  barsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  barCol: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  barDate: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    marginTop: 4,
+  },
+  singlePointWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  singlePoint: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.accent,
+  },
+  singlePointLabel: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '700',
+  },
+  chartEmpty: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  chartEmptyText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    textAlign: 'center',
+  },
+  chartFooter: {
+    marginTop: spacing.xs,
+  },
+  chartFooterLabel: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  chartFooterValue: {
+    color: colors.text,
+    fontSize: typography.small,
+    marginTop: 2,
   },
 });

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -14,13 +14,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '../constants/theme';
+import { ensureNotificationsReady } from '../hooks/useNotifications';
 import {
-  addPriceAlert,
   deletePriceAlert,
   formatDate,
   formatEuro,
+  setPriceAlert,
   togglePriceAlert,
-  updatePriceAlert,
   useAppData,
 } from '../hooks/useStorage';
 import type { PriceAlert } from '../types';
@@ -30,7 +30,19 @@ export default function AlertsScreen() {
   const [name, setName] = useState('');
   const [store, setStore] = useState('');
   const [target, setTarget] = useState('');
-  const [current, setCurrent] = useState('');
+  const [notificationsReady, setNotificationsReady] = useState<boolean | null>(null);
+
+  // Ask for notification permission once when the user lands here. We don't
+  // request eagerly on app start — first visit feels like the right moment.
+  useEffect(() => {
+    let cancelled = false;
+    void ensureNotificationsReady().then((granted) => {
+      if (!cancelled) setNotificationsReady(granted);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sorted = useMemo(() => {
     return [...data.alerts].sort((a, b) => {
@@ -50,22 +62,15 @@ export default function AlertsScreen() {
       Alert.alert('Doelprijs vereist', 'Vul een geldige doelprijs in.');
       return;
     }
-    const currentNum = current ? Number(current.replace(',', '.')) : undefined;
-    if (current && (!Number.isFinite(currentNum) || (currentNum ?? 0) < 0)) {
-      Alert.alert('Huidige prijs ongeldig', 'Vul een geldige huidige prijs in.');
-      return;
+    try {
+      await setPriceAlert(trimmed, targetNum, store.trim() || undefined);
+      setName('');
+      setStore('');
+      setTarget('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Kon alert niet opslaan.';
+      Alert.alert('Alert mislukt', msg);
     }
-    await addPriceAlert({
-      productName: trimmed,
-      store: store.trim() || undefined,
-      targetPrice: targetNum,
-      currentPrice: currentNum,
-      active: true,
-    });
-    setName('');
-    setStore('');
-    setTarget('');
-    setCurrent('');
   }
 
   function confirmDelete(alert: PriceAlert) {
@@ -84,25 +89,17 @@ export default function AlertsScreen() {
   }
 
   function renderItem({ item }: { item: PriceAlert }) {
-    const progress = item.currentPrice
-      ? Math.max(0, Math.min(1, 1 - item.currentPrice / item.targetPrice))
-      : 0;
-    const triggered =
-      item.currentPrice !== undefined && item.currentPrice <= item.targetPrice;
+    const storeLine = item.store ? item.store : 'Alle winkels';
     return (
-      <View
-        style={[
-          styles.card,
-          triggered && styles.cardTriggered,
-          !item.active && styles.cardInactive,
-        ]}
-      >
+      <View style={[styles.card, !item.active && styles.cardInactive]}>
         <View style={styles.cardHeader}>
           <View style={styles.flex}>
-            <Text style={styles.alertName}>{item.productName}</Text>
-            {item.store ? (
-              <Text style={styles.alertStore}>{item.store}</Text>
-            ) : null}
+            <Text style={styles.alertName} numberOfLines={1}>
+              {item.productName}
+            </Text>
+            <Text style={styles.alertStore} numberOfLines={1}>
+              {storeLine}
+            </Text>
           </View>
           <Pressable
             hitSlop={8}
@@ -121,17 +118,11 @@ export default function AlertsScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.pricesRow}>
+        <View style={styles.targetRow}>
           <View style={styles.flex}>
-            <Text style={styles.priceLabel}>Doel</Text>
-            <Text style={styles.priceValue}>{formatEuro(item.targetPrice)}</Text>
-          </View>
-          <View style={styles.flex}>
-            <Text style={styles.priceLabel}>Nu</Text>
-            <Text style={[styles.priceValue, triggered && styles.priceTriggered]}>
-              {item.currentPrice !== undefined
-                ? formatEuro(item.currentPrice)
-                : '—'}
+            <Text style={styles.priceLabel}>Doelprijs</Text>
+            <Text style={styles.priceValue}>
+              {formatEuro(item.targetPrice)}
             </Text>
           </View>
           <View style={styles.flex}>
@@ -140,38 +131,12 @@ export default function AlertsScreen() {
           </View>
         </View>
 
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-        </View>
+        <Text style={styles.alertHint}>
+          Je krijgt een melding zodra je dit product scant op of onder{' '}
+          {formatEuro(item.targetPrice)}.
+        </Text>
 
         <View style={styles.cardActions}>
-          {item.currentPrice === undefined ? (
-            <TouchableOpacity
-              style={styles.smallBtn}
-              onPress={() => {
-                Alert.prompt?.(
-                  'Huidige prijs instellen',
-                  `Huidige prijs voor ${item.productName} (€)`,
-                  (text) => {
-                    const num = Number((text || '').replace(',', '.'));
-                    if (Number.isFinite(num)) {
-                      void updatePriceAlert(item.id, { currentPrice: num });
-                    }
-                  },
-                  'plain-text',
-                  '',
-                  'numeric',
-                );
-                // Alert.prompt only available on iOS — fallback for Android:
-                if (Platform.OS !== 'ios') {
-                  void updatePriceAlert(item.id, { currentPrice: item.targetPrice });
-                }
-              }}
-            >
-              <Ionicons name="create-outline" size={14} color={colors.accent} />
-              <Text style={styles.smallBtnText}>Prijs instellen</Text>
-            </TouchableOpacity>
-          ) : null}
           <TouchableOpacity
             style={[styles.smallBtn, styles.smallBtnDanger]}
             onPress={() => confirmDelete(item)}
@@ -197,6 +162,21 @@ export default function AlertsScreen() {
           <Text style={styles.subtitle}>
             Krijg een melding wanneer een product onder je doelprijs zakt.
           </Text>
+          {notificationsReady === false ? (
+            <TouchableOpacity
+              style={styles.notice}
+              onPress={() => void ensureNotificationsReady()}
+            >
+              <Ionicons
+                name="notifications-off-outline"
+                size={16}
+                color={colors.warning}
+              />
+              <Text style={styles.noticeText}>
+                Meldingen staan uit. Tik om opnieuw te vragen.
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.composer}>
@@ -219,14 +199,6 @@ export default function AlertsScreen() {
               value={target}
               onChangeText={setTarget}
               placeholder="Doelprijs €"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              style={[styles.input, styles.flex]}
-            />
-            <TextInput
-              value={current}
-              onChangeText={setCurrent}
-              placeholder="Nu € (optioneel)"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               style={[styles.input, styles.flex]}
@@ -285,6 +257,22 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: spacing.xs,
   },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  noticeText: {
+    color: colors.warning,
+    fontSize: typography.small,
+    flex: 1,
+  },
   composer: {
     paddingHorizontal: spacing.lg,
     marginTop: spacing.lg,
@@ -326,9 +314,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardTriggered: {
-    borderColor: colors.success,
-  },
   cardInactive: {
     opacity: 0.55,
   },
@@ -346,7 +331,7 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: 2,
   },
-  pricesRow: {
+  targetRow: {
     flexDirection: 'row',
     marginTop: spacing.md,
     gap: spacing.md,
@@ -361,24 +346,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
-  priceTriggered: {
-    color: colors.success,
-  },
   priceMeta: {
     color: colors.text,
     fontSize: typography.body,
     marginTop: 2,
   },
-  progressBar: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.surfaceAlt,
+  alertHint: {
+    color: colors.textMuted,
+    fontSize: typography.small,
     marginTop: spacing.md,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.success,
+    fontStyle: 'italic',
   },
   cardActions: {
     flexDirection: 'row',
