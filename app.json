@@ -41,7 +41,8 @@
         {
           "cameraPermission": "PrixBon gebruikt de camera om bonnetjes te scannen en lokaal op te slaan."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},
