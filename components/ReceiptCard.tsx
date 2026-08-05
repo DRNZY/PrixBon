@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   total: {
-    color: colors.success,
+    color: colors.accent,
     fontSize: typography.h2,
     fontWeight: '800',
   },

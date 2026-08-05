@@ -3,31 +3,37 @@
 # dependencies
 node_modules/
 
-# Expo
+# Expo & Web
 .expo/
 dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native & Android Builds
 .kotlin/
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
 *.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.apk
+*.aab
 
 # Metro
 .metro-health-check*
 
-# debug
+# Debug logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# OS & Environment
 .DS_Store
 *.pem
-
-# local env filesx
+.env*.local
+.env

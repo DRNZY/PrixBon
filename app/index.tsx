@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
   },
   summaryValue: {
-    color: colors.success,
+    color: colors.accent,
     fontSize: typography.h1,
     fontWeight: '800',
     marginTop: spacing.xs,
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
   },
   sheetTotalsValue: {
-    color: colors.success,
+    color: colors.accent,
     fontSize: typography.h2,
     fontWeight: '800',
     marginTop: spacing.xs,
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   productLineTotal: {
-    color: colors.success,
+    color: colors.accent,
     fontSize: typography.body,
     fontWeight: '700',
   },

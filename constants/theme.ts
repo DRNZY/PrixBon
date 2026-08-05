@@ -1,20 +1,21 @@
-// PrixBon theme tokens - dark theme tuned for receipt / shopping / price-alert UI.
+// PrixBon theme tokens — dark neutral base with warm muted accent.
+// Green/red reserved strictly for price/status semantics, not decoration.
 
 export const colors = {
-  background: '#0f0f1a',
-  surface: '#1a1a2e',
-  surfaceAlt: '#232342',
-  border: '#2a2a44',
-  accent: '#667eea',
-  accentSoft: '#3f4480',
-  success: '#00e676',
-  successSoft: '#0d3b22',
-  danger: '#ff5252',
-  warning: '#ffb74d',
-  text: '#f5f5fa',
-  textMuted: '#9aa0b4',
-  textInverse: '#0f0f1a',
-  overlay: 'rgba(0,0,0,0.55)',
+  background: '#0f0f0f',
+  surface: '#1c1c1e',
+  surfaceAlt: '#2c2c2e',
+  border: '#38383a',
+  accent: '#d4a373',
+  accentSoft: '#2d251e',
+  success: '#34d399',
+  successSoft: '#0d3323',
+  danger: '#f87171',
+  warning: '#fbbf24',
+  text: '#f5f5f0',
+  textMuted: '#9a9aa0',
+  textInverse: '#0f0f0f',
+  overlay: 'rgba(0,0,0,0.6)',
 } as const;
 
 export const spacing = {

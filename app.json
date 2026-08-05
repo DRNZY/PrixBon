@@ -24,7 +24,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f0f1a"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.drnzy000.PrixBon",
       "permissions": [
@@ -42,7 +41,8 @@
           "cameraPermission": "PrixBon gebruikt de camera om bonnetjes te scannen en lokaal op te slaan."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-status-bar"
     ],
     "extra": {
       "router": {},

@@ -310,7 +310,6 @@ export default function StatsScreen() {
               label={`${capitalize(c.category)} (${c.count})`}
               value={formatEuro(c.total)}
               ratio={categories.max ? c.total / categories.max : 0}
-              tone="success"
             />
           ))}
           {categories.items.length === 0 ? (
@@ -588,7 +587,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   kpiValueAccent: {
-    color: colors.success,
+    color: colors.accent,
   },
   kpiValueSmall: {
     fontSize: typography.h3,

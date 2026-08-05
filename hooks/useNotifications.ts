@@ -31,7 +31,7 @@ export async function ensureNotificationsReady(): Promise<boolean> {
           name: 'Prijsalerts',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#667eea',
+          lightColor: '#d4a373',
         });
       } catch (err) {
         console.warn('[notifications] setNotificationChannelAsync failed', err);

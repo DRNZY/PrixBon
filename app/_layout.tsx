@@ -10,13 +10,7 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Tabs
         screenOptions={{
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          headerTitleStyle: {
-            color: colors.text,
-            fontWeight: '700',
-            fontSize: typography.h3,
-          },
+          headerShown: false,
           tabBarStyle: {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,

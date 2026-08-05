@@ -513,7 +513,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   countryChip: {
-    paddingHorizontal: spacing.md,
+    flex: 1,
+    alignItems: 'center',
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
@@ -590,7 +591,7 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
   },
   totalsValue: {
-    color: colors.success,
+    color: colors.accent,
     fontSize: typography.h2,
     fontWeight: '800',
   },
